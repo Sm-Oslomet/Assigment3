@@ -31,7 +31,7 @@ $('#app').innerHTML = `
 </div><div class="buttonline"><button type="button" class="btn btn-primary" id="saveSettings">Save company details</button><span class="helper">Use sample data only when sharing a demo.</span></div></section>
 <div class="layout"><div class="stack">
 <section class="panel"><div class="panelhead"><div><div class="step">01 / DETAILS</div><h2>Invoice information</h2></div></div><div class="form-grid"><label>Invoice number <span>*</span><input id="invoiceNumber" readonly title="Automatically allocated after a successful PDF download"/></label><label>Invoice date <span>*</span><input id="invoiceDate" type="date"/></label><label>Due date <span>*</span><input id="dueDate" type="date"/></label><label>Delivery date <span>*</span><input id="deliveryDate" type="date"/></label><label class="span2">Delivery location<input id="deliveryLocation" placeholder="Oslo / online / at customer location"/></label></div></section>
-<section class="panel"><div class="panelhead"><div><div class="step">02 / CUSTOMER</div><h2>Bill to</h2></div></div><div class="form-grid"><label>Customer name <span>*</span><input id="customerName" placeholder="Customer or business name"/></label><label>Customer email<input id="customerEmail" type="email" placeholder="customer@example.com"/></label><label class="span2">Street address <span>*</span><input id="customerAddress" placeholder="Customer street 5"/></label><label class="span2">Postal code and city <span>*</span><input id="customerPostal" placeholder="5003 Bergen"/></label></div></section>
+<section class="panel"><div class="panelhead"><div><div class="step">02 / CUSTOMER</div><h2>Bill to</h2></div></div><div class="form-grid"><label>Customer name <span>*</span><input id="customerName" placeholder="Customer or business name"/></label><label>Customer number (optional)<input id="customerNumber" placeholder="e.g. 10025"/></label><label>Customer email<input id="customerEmail" type="email" placeholder="customer@example.com"/></label><label class="span2">Street address <span>*</span><input id="customerAddress" placeholder="Customer street 5"/></label><label class="span2">Postal code and city <span>*</span><input id="customerPostal" placeholder="5003 Bergen"/></label></div></section>
 <section class="panel"><div class="panelhead"><div><div class="step">03 / ITEMS</div><h2>Products & services</h2></div><span class="lightpill" id="itemCount">1 item</span></div><div class="items-head"><span>Description</span><span>Quantity</span><span>Unit price (NOK)</span><span></span></div><div id="items"></div><button type="button" class="add-btn" id="addItem">+ Add another item</button><div class="taxrow"><label for="vatRate">VAT rate (only if applicable)</label><select id="vatRate"><option value="0">0% — No VAT</option><option value="25">25%</option><option value="15">15%</option><option value="12">12%</option></select></div><p class="helper">Prices are excluding VAT. Select VAT only when the seller is registered and the rate applies.</p></section>
 <section class="panel"><div class="panelhead"><div><div class="step">04 / OPTIONAL</div><h2>Additional note</h2></div></div><label class="full">Notes for customer<textarea id="notes" rows="3" placeholder="Thank you for your business."></textarea></label></section>
 </div><aside class="stack aside"><section class="panel summary"><div class="step">YOUR INVOICE</div><h2>Overview</h2><div class="preview-company" id="sellerPreview">Add your company details to get started.</div><div class="summary-divider"></div><div class="summary-row"><span>Subtotal</span><strong id="subtotal">0,00 kr</strong></div><div class="summary-row"><span id="vatLabel">VAT (0%)</span><strong id="vatAmount">0,00 kr</strong></div><div class="summary-total"><span>Total due</span><strong id="total">0,00 kr</strong></div><button type="button" id="generate" class="btn btn-primary generate">↓ Create & download PDF</button><p class="summary-tip">Your PDF is created in your browser. No data is sent to a server.</p></section><section class="note-panel"><strong>Before you generate</strong><p>Check company details, dates, bank account, and VAT. This is a learning prototype, not a full bookkeeping system.</p></section></aside></div>
@@ -51,22 +51,104 @@ const {c,customer,totals}=validate(); const doc=new jsPDF({unit:'mm',format:'a4'
 function pageGuard(height=12) {if(y+height>277){doc.addPage();y=20;}}
 function write(text,x,yy,opt={}) {doc.text(pdfText(text),x,yy,opt);}
 function wrap(text,x,width,leading=5,fs=10) {doc.setFontSize(fs);const lines=doc.splitTextToSize(pdfText(text),width); for(const l of lines){pageGuard(leading);write(l,x,y);y+=leading;}}
-function block(label,lines,x,yy){doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(82,98,120);write(label,x,yy);doc.setTextColor(23,38,59);doc.setFont('helvetica','normal');doc.setFontSize(10);let cursor=yy+7;for(const l of lines.filter(Boolean)){for(const segment of doc.splitTextToSize(pdfText(l),79)){write(segment,x,cursor);cursor+=5;}}return cursor;}
-doc.setFillColor(24,49,86);doc.rect(0,0,W,8,'F');doc.setTextColor(24,49,86);doc.setFont('helvetica','bold');doc.setFontSize(27);write('INVOICE',left,28);doc.setFont('helvetica','normal');doc.setTextColor(100,112,128);doc.setFontSize(10);write(`#${nextNumber}`,right,27,{align:'right'});
-const registration=c.orgNumber?`${c.orgNumber}${totals.rate>0?' MVA':''}`:'';
-const sellerLines=[c.companyName,c.companyAddress,c.companyPostal,registration,c.companyEmail,c.companyPhone];const buyerLines=[customer.name,customer.address,customer.postal,customer.email];
-const senderBottom=block('FROM / SELLER',sellerLines,left,44);const buyerBottom=block('BILL TO / CUSTOMER',buyerLines,109,44);y=Math.max(senderBottom,buyerBottom)+11;
-doc.setDrawColor(222,229,239);line(left,y,right,y);y+=10;
-const rowDate=(label,value,x,yy)=>{doc.setFontSize(9);doc.setTextColor(105,117,131);write(label,x,yy);doc.setTextColor(22,38,61);doc.setFont('helvetica','bold');write(value,x,yy+6);doc.setFont('helvetica','normal');};
-rowDate('INVOICE DATE',$('#invoiceDate').value,left,y);rowDate('DUE DATE',$('#dueDate').value,75,y);rowDate('DELIVERY DATE',$('#deliveryDate').value,136,y);y+=19;
-if($('#deliveryLocation').value.trim()){doc.setFontSize(9);doc.setTextColor(98,110,126);write('DELIVERY LOCATION',left,y);doc.setTextColor(25,38,58);doc.setFontSize(10); const parts=doc.splitTextToSize(pdfText($('#deliveryLocation').value.trim()),170); y+=6;parts.forEach(t=>{write(t,left,y);y+=5;});y+=3;}
-const header=()=>{doc.setFillColor(237,242,248);doc.rect(left,y,174,11,'F');doc.setFont('helvetica','bold');doc.setTextColor(39,61,86);doc.setFontSize(9);write('DESCRIPTION',left+3,y+7);write('QTY',125,y+7,{align:'right'});write('UNIT PRICE',157,y+7,{align:'right'});write('AMOUNT',right-3,y+7,{align:'right'});doc.setFont('helvetica','normal');y+=14;};
-pageGuard(28);header();
-items.forEach((it)=>{doc.setFontSize(9);const desc=doc.splitTextToSize(pdfText(it.description),89); const h=Math.max(desc.length*5+5,13);pageGuard(h+6);if(y===20)header(); doc.setTextColor(31,46,67);desc.forEach((txt,j)=>write(txt,left+3,y+6+j*5));write(String(it.quantity),125,y+6,{align:'right'});write(money(Number(it.price)),157,y+6,{align:'right'});write(money(Number(it.quantity)*Number(it.price)),right-3,y+6,{align:'right'});y+=h;doc.setDrawColor(231,236,243);line(left,y,right,y);});
-y+=10;pageGuard(42);const amount=(label,value,bold=false)=>{doc.setFont('helvetica',bold?'bold':'normal');doc.setFontSize(bold?12:10);doc.setTextColor(25,42,64);write(label,111,y);write(money(value),right,y,{align:'right'});y+=bold?10:8;};amount('Subtotal',totals.subtotal);amount(`VAT (${totals.rate}%)`,totals.vat);doc.setDrawColor(34,67,104);line(111,y-3,right,y-3);y+=5;amount('TOTAL DUE',totals.total,true);
-pageGuard(35);y+=6;doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(28,51,84);write('PAYMENT DETAILS',left,y);y+=8;doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(38,54,73);wrap(`Bank account: ${c.bankAccount}`,left,174,5,10);wrap(`Payment reference: Invoice ${nextNumber}`,left,174,5,10);
+// PDF header: seller at the top; customer and metadata beneath, followed by invoice title.
+const AMBER=[156,88,12], DARK=[48,37,22], MUTED=[108,97,81], LIGHT=[250,241,222];
+const color=(rgb)=>doc.setTextColor(...rgb);
+const detailLines=(lines,x,startY,width=82,leading=5)=>{
+  let yy=startY;doc.setFont('helvetica','normal');doc.setFontSize(9.5);color(MUTED);
+  for(const value of lines.filter(Boolean)){
+    for(const segment of doc.splitTextToSize(pdfText(value),width)){write(segment,x,yy);yy+=leading;}
+  }
+  return yy;
+};
+const registration=c.orgNumber?`Org.nr: ${c.orgNumber}${totals.rate>0?' MVA':''}`:'';
+// Seller, top left. Company name is visually dominant.
+doc.setFont('helvetica','bold');doc.setFontSize(16);color(DARK);
+const sellerName=doc.splitTextToSize(pdfText(c.companyName),130);
+let sellerY=24;
+for(const value of sellerName){write(value,left,sellerY);sellerY+=7;}
+const sellerBottom=detailLines([registration,c.companyAddress,c.companyPostal,c.companyEmail,c.companyPhone],left,sellerY+1,115);
+const sectionY=Math.max(62,sellerBottom+12);
+// Customer details, left column.
+doc.setFont('helvetica','bold');doc.setFontSize(12);color(DARK);
+let buyerY=sectionY;
+for(const value of doc.splitTextToSize(pdfText(customer.name),86)){write(value,left,buyerY);buyerY+=6;}
+const buyerBottom=detailLines([customer.address,customer.postal,customer.email],left,buyerY+1,86);
+// Invoice metadata, right column, stacked vertically.
+// Anchor both metadata labels and values to the PDF's right margin.
+// Keep the original description, quantity, unit price, amount and totals layout unchanged.
+const metaX=116;
+let metaY=sectionY;
+function metaRow(label,value){
+  doc.setFont('helvetica','normal');doc.setFontSize(9);color(MUTED);
+  write(label,right,metaY,{align:'right'});
+  doc.setFont('helvetica','bold');doc.setFontSize(9.5);color(DARK);
+  const values=doc.splitTextToSize(pdfText(value),right-metaX);
+  for(const [i,v] of values.entries())write(v,right,metaY+4+i*4.5,{align:'right'});
+  // Keep the label/value pairing tight, with a small gap before the next pair.
+  metaY+=Math.max(10,5+values.length*4.5);
+}
+metaRow('Invoice number',String(nextNumber));
+if($('#customerNumber').value.trim())metaRow('Customer number',$('#customerNumber').value.trim());
+metaRow('Invoice date',$('#invoiceDate').value);
+metaRow('Due date',$('#dueDate').value);
+metaRow('Delivery date',$('#deliveryDate').value);
+y=Math.max(buyerBottom,metaY)+7;
+// Invoice title comes AFTER seller/customer/metadata.
+pageGuard(34);
+doc.setFont('helvetica','bold');doc.setFontSize(27);color(AMBER);
+write('INVOICE',left,y);y+=5;
+doc.setDrawColor(...AMBER);doc.setLineWidth(0.85);line(left,y,right,y);doc.setLineWidth(0.2);
+y+=13;
+if($('#deliveryLocation').value.trim()){
+  doc.setFont('helvetica','bold');doc.setFontSize(9);color(AMBER);
+  write('DELIVERY LOCATION',left,y);y+=6;
+  doc.setFont('helvetica','normal');color(MUTED);
+  for(const part of doc.splitTextToSize(pdfText($('#deliveryLocation').value.trim()),170)){
+    pageGuard(5);write(part,left,y);y+=5;
+  }
+  y+=6;
+}
+// Preserve the ORIGINAL four-column PDF table layout: four independent fields.
+// Coordinates are in millimeters on an A4 page; each numeric column is right-aligned.
+const tableColumns = {description: left + 3, quantity: 125, unitPrice: 157, amount: right - 3};
+const header = () => {
+  doc.setFillColor(250,241,222); // amber tint: color only, not layout
+  doc.rect(left,y,174,11,'F');
+  doc.setFont('helvetica','bold');
+  doc.setTextColor(117,68,13);
+  doc.setFontSize(9);
+  write('DESCRIPTION',tableColumns.description,y+7);
+  write('QTY',tableColumns.quantity,y+7,{align:'right'});
+  write('UNIT PRICE',tableColumns.unitPrice,y+7,{align:'right'});
+  write('AMOUNT',tableColumns.amount,y+7,{align:'right'});
+  doc.setFont('helvetica','normal');
+  y+=14;
+};
+pageGuard(28);
+header();
+items.forEach(it => {
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(9);
+  // Original description width, height and row spacing.
+  const descriptionLines=doc.splitTextToSize(pdfText(it.description),89);
+  const height=Math.max(descriptionLines.length*5+5,13);
+  pageGuard(height+6);
+  if(y===20)header();
+  doc.setTextColor(48,37,22);
+  descriptionLines.forEach((txt,index)=>write(txt,tableColumns.description,y+6+index*5));
+  // These are separate cells, not one combined quantity × price expression.
+  write(String(it.quantity),tableColumns.quantity,y+6,{align:'right'});
+  write(money(Number(it.price)),tableColumns.unitPrice,y+6,{align:'right'});
+  write(money(Number(it.quantity)*Number(it.price)),tableColumns.amount,y+6,{align:'right'});
+  y+=height;
+  doc.setDrawColor(232,219,196);
+  line(left,y,right,y);
+});
+y+=10;pageGuard(42);const amount=(label,value,bold=false)=>{doc.setFont('helvetica',bold?'bold':'normal');doc.setFontSize(bold?12:10);doc.setTextColor(48,37,22);write(label,111,y);write(money(value),right,y,{align:'right'});y+=bold?10:8;};amount('Subtotal',totals.subtotal);amount(`VAT (${totals.rate}%)`,totals.vat);doc.setDrawColor(156,88,12);line(111,y-3,right,y-3);y+=5;amount('TOTAL DUE',totals.total,true);
+pageGuard(35);y+=6;doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(156,88,12);write('PAYMENT DETAILS',left,y);y+=8;doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(72,58,38);wrap(`Bank account: ${c.bankAccount}`,left,174,5,10);wrap(`Payment reference: Invoice ${nextNumber}`,left,174,5,10);
 if($('#notes').value.trim()){y+=7;pageGuard(24);doc.setFont('helvetica','bold');doc.setFontSize(10);write('NOTES',left,y);doc.setFont('helvetica','normal');y+=7;wrap($('#notes').value.trim(),left,174,5,10);}
-const pages=doc.getNumberOfPages();for(let p=1;p<=pages;p++){doc.setPage(p);doc.setDrawColor(230,234,241);line(left,283,right,283);doc.setFontSize(8);doc.setTextColor(127,138,150);write('Generated with Invoice Studio',left,289);write(`Page ${p} of ${pages}`,right,289,{align:'right'});}
+const pages=doc.getNumberOfPages();for(let p=1;p<=pages;p++){doc.setPage(p);doc.setDrawColor(232,219,196);line(left,283,right,283);doc.setFontSize(8);doc.setTextColor(127,138,150);write('Generated with Invoice Studio',left,289);write(`Page ${p} of ${pages}`,right,289,{align:'right'});}
 const filename=`invoice-${nextNumber}.pdf`;doc.save(filename);nextNumber++;localStorage.setItem(COUNTER_KEY,String(nextNumber));$('#invoiceNumber').value=nextNumber;flash(`PDF generated: ${filename}. Invoice number advanced to ${nextNumber}.`);
 } catch(err){flash(err instanceof Error?err.message:'Could not generate PDF.','error');} }
 
